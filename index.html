@@ -791,7 +791,7 @@ function onMouseMove(e) {
 // ══════════════════════════════════════════
 // GIROSCÓPIO
 // ══════════════════════════════════════════
-let baseAlpha = null, baseBeta = null;
+let lastAlpha = null, lastBeta = null;
 
 function ativarGiroscopio() {
   window.addEventListener('deviceorientation', onGyro);
@@ -801,7 +801,7 @@ function ativarGiroscopio() {
 function desativarGiroscopio() {
   window.removeEventListener('deviceorientation', onGyro);
   gyroAtivo = false;
-  baseAlpha = null;
+  lastAlpha = null;
 }
 
 // Diferença angular tratando o "salto" 0°/360° da bússola
@@ -814,12 +814,17 @@ function angDiff(a, b) {
 
 function onGyro(e) {
   if (isDragging || e.alpha === null) return;
-  if (baseAlpha === null) { baseAlpha = e.alpha; baseBeta = e.beta; return; }
-  const da = angDiff(e.alpha, baseAlpha);
-  const db = e.beta - baseBeta;
-  yawAlvo   = (da * Math.PI / 180);
-  pitchAlvo = (-db * Math.PI / 180 * 0.5);
+  if (lastAlpha === null) { lastAlpha = e.alpha; lastBeta = e.beta; return; }
+  // Acumula a diferença entre leituras consecutivas (sempre pequena),
+  // em vez de comparar com uma base fixa — evita o salto ao passar de 180°
+  // durante uma volta completa de 360°.
+  const da = angDiff(e.alpha, lastAlpha);
+  const db = e.beta - lastBeta;
+  yawAlvo   += da * Math.PI / 180;
+  pitchAlvo -= db * Math.PI / 180 * 0.5;
   pitchAlvo = Math.max(-1.3, Math.min(1.3, pitchAlvo));
+  lastAlpha = e.alpha;
+  lastBeta = e.beta;
 }
 
 </script>
