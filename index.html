@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Viagem no Tempo — Balneário Camboriú 200 Anos</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;500;600&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --ouro: #C8860A;
+    --ouro-claro: #E6A020;
+    --ouro-brilho: #FFD700;
+    --escuro: #0D0800;
+    --texto: #F5EDD8;
+    --card-bg: rgba(20,10,0,0.85);
+  }
+
+  body {
+    background: var(--escuro);
+    color: var(--texto);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url('./fundo_BC.jpg');
+    background-size: cover;
+    background-position: center top;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: rgba(13, 8, 0, 0.72);
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  #tela-inicio {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── TELA INICIAL ── */
+  #tela-inicio {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+    background: radial-gradient(ellipse at 50% 0%, rgba(200,134,10,0.18) 0%, transparent 70%),
+                linear-gradient(180deg, #0D0800 0%, #1a0f00 100%);
+  }
+
+  .logo-feira {
+    font-family: 'Cinzel', serif;
+    font-size: clamp(11px, 2.5vw, 13px);
+    letter-spacing: 3px;
+    color: var(--ouro);
+    text-transform: uppercase;
+    text-align: center;
+    margin-bottom: 12px;
+    opacity: 0.8;
+  }
+
+  .titulo-site {
+    font-family: 'Cinzel', serif;
+    font-size: clamp(26px, 7vw, 48px);
+    font-weight: 900;
+    text-align: center;
+    line-height: 1.15;
+    color: var(--texto);
+    margin-bottom: 6px;
+  }
+
+  .titulo-site span {
+    color: var(--ouro-claro);
+    display: block;
+  }
+
+  .subtitulo {
+    font-size: clamp(12px, 3vw, 15px);
+    color: rgba(245,237,216,0.55);
+    text-align: center;
+    margin-bottom: 36px;
+    letter-spacing: 0.5px;
+  }
+
+  .instrucao {
+    font-size: 13px;
+    color: rgba(245,237,216,0.5);
+    text-align: center;
+    margin-bottom: 20px;
+    font-style: italic;
+  }
+
+  /* ── CARDS DE TEMA ── */
+  .grid-temas {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    max-width: 420px;
+  }
+
+  .card-tema {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--card-bg);
+    border: 1px solid rgba(200,134,10,0.3);
+    border-radius: 12px;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+    width: 100%;
+    color: var(--texto);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .card-tema:active {
+    transform: scale(0.97);
+    border-color: var(--ouro-claro);
+    background: rgba(200,134,10,0.15);
+  }
+
+  .card-icone {
+    font-size: 28px;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(200,134,10,0.12);
+    border-radius: 10px;
+    flex-shrink: 0;
+  }
+
+  .card-info {
+    flex: 1;
+  }
+
+  .card-ano {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--ouro);
+    margin-bottom: 2px;
+  }
+
+  .card-titulo {
+    font-family: 'Cinzel', serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--texto);
+    line-height: 1.3;
+  }
+
+  .card-desc {
+    font-size: 11px;
+    color: rgba(245,237,216,0.45);
+    margin-top: 2px;
+  }
+
+  .card-seta {
+    color: var(--ouro);
+    font-size: 18px;
+    opacity: 0.6;
+  }
+
+  .rodape-site {
+    margin-top: 32px;
+    text-align: center;
+    font-size: 11px;
+    color: rgba(245,237,216,0.3);
+    line-height: 1.8;
+  }
+
+  .rodape-site strong {
+    color: rgba(200,134,10,0.7);
+  }
+
+  /* ── TELA VR ── */
+  #tela-vr {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #000;
+    z-index: 100;
+  }
+
+  #canvas-vr {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* HUD — visível em modo VR (dividido) */
+  #hud {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 200;
+    pointer-events: none;
+  }
+
+  /* Título da cena */
+  .hud-titulo {
+    position: fixed;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Cinzel', serif;
+    font-size: 13px;
+    color: var(--ouro-claro);
+    background: rgba(0,0,0,0.65);
+    padding: 6px 16px;
+    border-radius: 20px;
+    border: 1px solid rgba(200,134,10,0.4);
+    white-space: nowrap;
+    z-index: 201;
+    text-align: center;
+  }
+
+  /* Botão sair */
+  #btn-sair {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 210;
+    background: rgba(0,0,0,0.7);
+    border: 1px solid rgba(200,134,10,0.4);
+    color: var(--ouro);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    letter-spacing: 1px;
+  }
+
+  /* Navegação inferior — toque antes de colocar óculos */
+  #nav-cenas {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    z-index: 210;
+    background: rgba(0,0,0,0.7);
+    padding: 8px 12px;
+    border-radius: 30px;
+    border: 1px solid rgba(200,134,10,0.3);
+  }
+
+  .dot-cena {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(200,134,10,0.5);
+    background: rgba(200,134,10,0.1);
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .dot-cena.ativa {
+    border-color: var(--ouro-claro);
+    background: rgba(200,134,10,0.35);
+    transform: scale(1.15);
+  }
+
+  /* Gaze cursor — círculo que aparece no centro da tela */
+  #gaze-cursor {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px;
+    height: 20px;
+    z-index: 205;
+    pointer-events: none;
+    display: none;
+  }
+
+  .gaze-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 2px solid rgba(255,215,0,0.8);
+  }
+
+  .gaze-fill {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: conic-gradient(var(--ouro-brilho) 0%, transparent 0%);
+    transition: background 0.05s linear;
+  }
+
+  /* Botões PRÓXIMO / ANTERIOR — gaze targets */
+  .gaze-btn {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 50px;
+    height: 50px;
+    z-index: 206;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.5);
+    border: 1.5px solid rgba(200,134,10,0.5);
+    border-radius: 50%;
+    pointer-events: none;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  #gaze-prev { left: 8px; }
+  #gaze-next { right: 8px; }
+
+  .gaze-btn span {
+    color: var(--ouro-claro);
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .gaze-fill-btn {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: conic-gradient(rgba(200,134,10,0.6) 0%, transparent 0%);
+  }
+
+  /* Modo normal (sem óculos) — canvas full */
+  #instrucao-vr {
+    position: fixed;
+    bottom: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    color: rgba(245,237,216,0.4);
+    text-align: center;
+    z-index: 202;
+    white-space: nowrap;
+  }
+
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════
+     TELA INICIAL
+══════════════════════════════════════════ -->
+<div id="tela-inicio">
+  <div class="logo-feira">1ª Feira Cultural · Balneário Camboriú · 2026</div>
+  <h1 class="titulo-site">Viagem no Tempo<span>200 Anos de BC</span></h1>
+  <p class="subtitulo">Coloque os óculos e entre na história</p>
+
+  <p class="instrucao">Escolha um tema para começar</p>
+
+  <div class="grid-temas">
+    <button class="card-tema" onclick="entrarVR(0)">
+      <div class="card-icone">🌿</div>
+      <div class="card-info">
+        <div class="card-ano">Antes da Colonização</div>
+        <div class="card-titulo">Povos Originários</div>
+        <div class="card-desc">Entre na aldeia Guarani Carijó</div>
+      </div>
+      <div class="card-seta">›</div>
+    </button>
+
+    <button class="card-tema" onclick="entrarVR(1)">
+      <div class="card-icone">📜</div>
+      <div class="card-info">
+        <div class="card-ano">1821 · Carta de Sesmaria</div>
+        <div class="card-titulo">Balthazar Pinto Corrêa</div>
+        <div class="card-desc">Testemunhe a assinatura do documento histórico</div>
+      </div>
+      <div class="card-seta">›</div>
+    </button>
+
+    <button class="card-tema" onclick="entrarVR(2)">
+      <div class="card-icone">⚓</div>
+      <div class="card-info">
+        <div class="card-ano">Séc. XIX–XX · Cultura Litorânea</div>
+        <div class="card-titulo">Pescadores da Barra</div>
+        <div class="card-desc">Reviva a praia dos pescadores de BC</div>
+      </div>
+      <div class="card-seta">›</div>
+    </button>
+
+    <button class="card-tema" onclick="entrarVR(3)">
+      <div class="card-icone">🥁</div>
+      <div class="card-info">
+        <div class="card-ano">Comunidade Viva · Morro do Boi</div>
+        <div class="card-titulo">Comunidade Quilombola</div>
+        <div class="card-desc">Visite o Quilombo Morro do Boi</div>
+      </div>
+      <div class="card-seta">›</div>
+    </button>
+
+    <button class="card-tema" onclick="entrarVR(4)">
+      <div class="card-icone">🌊</div>
+      <div class="card-info">
+        <div class="card-ano">BC Hoje · Migrações e Diversidade</div>
+        <div class="card-titulo">Balneário Camboriú Atual</div>
+        <div class="card-desc">Caminhe pela orla multicultural de BC</div>
+      </div>
+      <div class="card-seta">›</div>
+    </button>
+  </div>
+
+  <div class="rodape-site">
+    <strong>Anderson Rodrigo Costa</strong><br>
+    Professor de Inovação e Tecnologias<br>
+    <strong>CEM Alfredo Domingos da Silva</strong><br>
+    Secretaria Municipal de Educação · Balneário Camboriú · 2026
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     TELA VR
+══════════════════════════════════════════ -->
+<div id="tela-vr">
+  <canvas id="canvas-vr"></canvas>
+
+  <div class="hud-titulo" id="hud-titulo">Povos Originários</div>
+
+  <button id="btn-sair" onclick="sairVR()">✕ SAIR</button>
+
+  <div id="instrucao-vr">Arraste para olhar ao redor · Toque nos ícones para trocar de cena</div>
+
+  <!-- Dots de navegação (toque antes de colocar óculos) -->
+  <div id="nav-cenas">
+    <div class="dot-cena ativa" onclick="trocarCena(0)" title="Povos Originários">🌿</div>
+    <div class="dot-cena" onclick="trocarCena(1)" title="Carta de Sesmaria">📜</div>
+    <div class="dot-cena" onclick="trocarCena(2)" title="Pescadores">⚓</div>
+    <div class="dot-cena" onclick="trocarCena(3)" title="Quilombola">🥁</div>
+    <div class="dot-cena" onclick="trocarCena(4)" title="BC Hoje">🌊</div>
+  </div>
+
+  <!-- Gaze cursor central -->
+  <div id="gaze-cursor">
+    <div class="gaze-ring"></div>
+    <div class="gaze-fill" id="gaze-fill"></div>
+  </div>
+
+  <!-- Botões gaze laterais -->
+  <div class="gaze-btn" id="gaze-prev">
+    <div class="gaze-fill-btn" id="fill-prev"></div>
+    <span>‹</span>
+  </div>
+  <div class="gaze-btn" id="gaze-next">
+    <div class="gaze-fill-btn" id="fill-next"></div>
+    <span>›</span>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+// CONFIGURAÇÃO DAS CENAS
+// ══════════════════════════════════════════
+const CENAS = [
+  {
+    titulo: '🌿 Povos Originários — Aldeia Guarani',
+    // Substitua pelos URLs reais das suas imagens (Google Drive, GitHub, etc.)
+    url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/280px-PNG_transparency_demonstration_1.png',
+    placeholder: true
+  },
+  {
+    titulo: '📜 Carta de Sesmaria — 1821',
+    url: null,
+    placeholder: true
+  },
+  {
+    titulo: '⚓ Pescadores da Barra',
+    url: null,
+    placeholder: true
+  },
+  {
+    titulo: '🥁 Comunidade Quilombola — Morro do Boi',
+    url: null,
+    placeholder: true
+  },
+  {
+    titulo: '🌊 BC Hoje — Migrações e Diversidade',
+    url: null,
+    placeholder: true
+  }
+];
+
+// URLs reais — substitua aqui quando tiver os links do Google Drive ou GitHub
+// Exemplo: CENAS[0].url = 'https://drive.google.com/uc?export=view&id=SEU_ID_AQUI';
+
+// ══════════════════════════════════════════
+// ESTADO
+// ══════════════════════════════════════════
+let cenaAtual = 0;
+let canvas, ctx, gl;
+let textura = null;
+let imagem = null;
+let isDragging = false;
+let lastX = 0, lastY = 0;
+let yaw = 0, pitch = 0;
+let gyroAtivo = false;
+let animId = null;
+let gazeTimer = null;
+let gazeProg = 0;
+let gazeAlvo = null; // 'prev' | 'next'
+const GAZE_TEMPO = 2000; // ms
+
+// ══════════════════════════════════════════
+// SHADERS WebGL para esfera 360°
+// ══════════════════════════════════════════
+const vsSource = `
+  attribute vec2 a_pos;
+  varying vec2 v_uv;
+  void main() {
+    v_uv = a_pos * 0.5 + 0.5;
+    gl_Position = vec4(a_pos, 0.0, 1.0);
+  }
+`;
+
+const fsSource = `
+  precision mediump float;
+  uniform sampler2D u_tex;
+  uniform float u_yaw;
+  uniform float u_pitch;
+  uniform float u_fov;
+  uniform float u_aspect;
+  uniform float u_eye; // -1 esq, +1 dir (VR split)
+  varying vec2 v_uv;
+
+  #define PI 3.14159265358979
+
+  mat3 rotY(float a) {
+    return mat3(cos(a),0,sin(a), 0,1,0, -sin(a),0,cos(a));
+  }
+  mat3 rotX(float a) {
+    return mat3(1,0,0, 0,cos(a),-sin(a), 0,sin(a),cos(a));
+  }
+
+  void main() {
+    // UV em espaço de cada olho
+    vec2 uv = v_uv;
+    if(u_eye < 0.0) uv.x = uv.x * 2.0;        // olho esquerdo
+    else            uv.x = uv.x * 2.0 - 1.0;   // olho direito
+
+    // Ray da câmera
+    vec2 ndc = uv * 2.0 - 1.0;
+    ndc.x *= u_aspect;
+    float f = 1.0 / tan(u_fov * 0.5);
+    vec3 ray = normalize(vec3(ndc.x, ndc.y, f));
+
+    // Aplicar rotação
+    ray = rotX(-u_pitch) * rotY(u_yaw) * ray;
+
+    // Equirretangular
+    float lon = atan(ray.x, ray.z);
+    float lat = asin(clamp(ray.y, -1.0, 1.0));
+    vec2 texUV = vec2(
+      (lon / (2.0 * PI)) + 0.5,
+      (lat / PI) + 0.5
+    );
+
+    gl_FragColor = texture2D(u_tex, texUV);
+  }
+`;
+
+// ══════════════════════════════════════════
+// INICIALIZAR WEBGL
+// ══════════════════════════════════════════
+function initGL() {
+  canvas = document.getElementById('canvas-vr');
+  gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+  if (!gl) { alert('Seu navegador não suporta WebGL'); return false; }
+
+  function compilar(tipo, src) {
+    const s = gl.createShader(tipo);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    return s;
+  }
+
+  const prog = gl.createProgram();
+  gl.attachShader(prog, compilar(gl.VERTEX_SHADER, vsSource));
+  gl.attachShader(prog, compilar(gl.FRAGMENT_SHADER, fsSource));
+  gl.linkProgram(prog);
+  gl.useProgram(prog);
+
+  // Quad fullscreen
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, 'a_pos');
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+
+  window._prog = prog;
+  window._uniforms = {
+    tex:    gl.getUniformLocation(prog, 'u_tex'),
+    yaw:    gl.getUniformLocation(prog, 'u_yaw'),
+    pitch:  gl.getUniformLocation(prog, 'u_pitch'),
+    fov:    gl.getUniformLocation(prog, 'u_fov'),
+    aspect: gl.getUniformLocation(prog, 'u_aspect'),
+    eye:    gl.getUniformLocation(prog, 'u_eye'),
+  };
+
+  textura = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, textura);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+  // Textura placeholder dourada
+  const px = new Uint8Array([200, 134, 10, 255]);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, px);
+
+  return true;
+}
+
+function carregarTextura(url) {
+  if (!url) { mostrarPlaceholder(); return; }
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    gl.bindTexture(gl.TEXTURE_2D, textura);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+  };
+  img.onerror = () => mostrarPlaceholder();
+  img.src = url;
+}
+
+function mostrarPlaceholder() {
+  // Cor de cada tema como placeholder
+  const cores = [
+    [30, 80, 20],    // verde floresta
+    [120, 80, 30],   // sépia documento
+    [20, 80, 120],   // azul oceano
+    [120, 50, 20],   // vermelho/terra
+    [20, 60, 120],   // azul moderno
+  ];
+  const [r,g,b] = cores[cenaAtual];
+  const px = new Uint8Array([r, g, b, 255]);
+  gl.bindTexture(gl.TEXTURE_2D, textura);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, px);
+}
+
+// ══════════════════════════════════════════
+// LOOP DE RENDER
+// ══════════════════════════════════════════
+function render() {
+  animId = requestAnimationFrame(render);
+
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  canvas.width = W;
+  canvas.height = H;
+  gl.viewport(0, 0, W, H);
+
+  const fov = 1.5; // ~86°
+  const asp = (W * 0.5) / H; // cada olho é metade da largura
+
+  // Olho esquerdo (0 a W/2)
+  gl.uniform1i(window._uniforms.tex, 0);
+  gl.uniform1f(window._uniforms.yaw, yaw);
+  gl.uniform1f(window._uniforms.pitch, pitch);
+  gl.uniform1f(window._uniforms.fov, fov);
+  gl.uniform1f(window._uniforms.aspect, asp);
+  gl.uniform1f(window._uniforms.eye, -1.0);
+  gl.scissor(0, 0, W/2, H);
+  gl.enable(gl.SCISSOR_TEST);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+  // Olho direito (W/2 a W)
+  gl.uniform1f(window._uniforms.eye, 1.0);
+  gl.scissor(W/2, 0, W/2, H);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+  gl.disable(gl.SCISSOR_TEST);
+
+  // Linha divisória central
+  const ctx2d = document.createElement('canvas').getContext('2d');
+  // (linha desenhada via CSS em elemento separado se necessário)
+}
+
+// ══════════════════════════════════════════
+// ENTRADA / SAÍDA VR
+// ══════════════════════════════════════════
+function entrarVR(idx) {
+  if (!initGL()) return;
+
+  document.getElementById('tela-inicio').style.display = 'none';
+  document.getElementById('tela-vr').style.display = 'block';
+  document.getElementById('gaze-prev').style.display = 'flex';
+  document.getElementById('gaze-next').style.display = 'flex';
+  document.getElementById('gaze-cursor').style.display = 'block';
+
+  // Solicitar giroscópio (iOS 13+)
+  if (typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission()
+      .then(r => { if (r === 'granted') ativarGiroscopio(); })
+      .catch(() => {});
+  } else {
+    ativarGiroscopio();
+  }
+
+  // Controles touch
+  canvas.addEventListener('touchstart', onTouchStart, {passive: false});
+  canvas.addEventListener('touchmove',  onTouchMove,  {passive: false});
+  canvas.addEventListener('touchend',   onTouchEnd);
+  canvas.addEventListener('mousedown',  onMouseDown);
+  canvas.addEventListener('mousemove',  onMouseMove);
+  canvas.addEventListener('mouseup',    () => isDragging = false);
+
+  trocarCena(idx);
+  render();
+}
+
+function sairVR() {
+  if (animId) cancelAnimationFrame(animId);
+  desativarGiroscopio();
+  canvas.removeEventListener('touchstart', onTouchStart);
+  canvas.removeEventListener('touchmove', onTouchMove);
+  canvas.removeEventListener('touchend', onTouchEnd);
+  canvas.removeEventListener('mousedown', onMouseDown);
+  canvas.removeEventListener('mousemove', onMouseMove);
+
+  document.getElementById('tela-vr').style.display = 'none';
+  document.getElementById('tela-inicio').style.display = 'flex';
+}
+
+function trocarCena(idx) {
+  cenaAtual = idx;
+  // Atualizar HUD
+  document.getElementById('hud-titulo').textContent = CENAS[idx].titulo;
+  // Atualizar dots
+  document.querySelectorAll('.dot-cena').forEach((d,i) => {
+    d.classList.toggle('ativa', i === idx);
+  });
+  // Carregar textura
+  carregarTextura(CENAS[idx].url);
+  // Reset view
+  yaw = 0; pitch = 0;
+}
+
+// ══════════════════════════════════════════
+// CONTROLES TOUCH / MOUSE
+// ══════════════════════════════════════════
+let touchStartX = 0, touchStartY = 0;
+
+function onTouchStart(e) {
+  e.preventDefault();
+  isDragging = true;
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+  iniciarGaze(e.touches[0].clientX, e.touches[0].clientY);
+}
+
+function onTouchMove(e) {
+  e.preventDefault();
+  if (!isDragging) return;
+  const dx = e.touches[0].clientX - touchStartX;
+  const dy = e.touches[0].clientY - touchStartY;
+  yaw   -= dx * 0.005;
+  pitch += dy * 0.005;
+  pitch = Math.max(-1.3, Math.min(1.3, pitch));
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+  cancelarGaze();
+}
+
+function onTouchEnd() {
+  isDragging = false;
+  cancelarGaze();
+}
+
+function onMouseDown(e) {
+  isDragging = true;
+  lastX = e.clientX; lastY = e.clientY;
+}
+
+function onMouseMove(e) {
+  if (!isDragging) return;
+  yaw   -= (e.clientX - lastX) * 0.005;
+  pitch += (e.clientY - lastY) * 0.005;
+  pitch = Math.max(-1.3, Math.min(1.3, pitch));
+  lastX = e.clientX; lastY = e.clientY;
+}
+
+// ══════════════════════════════════════════
+// GIROSCÓPIO
+// ══════════════════════════════════════════
+let baseAlpha = null, baseBeta = null;
+
+function ativarGiroscopio() {
+  window.addEventListener('deviceorientation', onGyro);
+  gyroAtivo = true;
+}
+
+function desativarGiroscopio() {
+  window.removeEventListener('deviceorientation', onGyro);
+  gyroAtivo = false;
+  baseAlpha = null;
+}
+
+function onGyro(e) {
+  if (isDragging) return;
+  if (baseAlpha === null) { baseAlpha = e.alpha; baseBeta = e.beta; return; }
+  const da = e.alpha - baseAlpha;
+  const db = e.beta  - baseBeta;
+  yaw   = (-da * Math.PI / 180) % (2 * Math.PI);
+  pitch = db * Math.PI / 180 * 0.5;
+  pitch = Math.max(-1.3, Math.min(1.3, pitch));
+}
+
+// ══════════════════════════════════════════
+// GAZE CONTROL
+// ══════════════════════════════════════════
+function iniciarGaze(x, y) {
+  const W = window.innerWidth;
+  const zona = W * 0.15; // 15% das bordas
+  if (x < zona) gazeAlvo = 'prev';
+  else if (x > W - zona) gazeAlvo = 'next';
+  else return;
+
+  gazeProg = 0;
+  const inicio = Date.now();
+
+  gazeTimer = setInterval(() => {
+    gazeProg = (Date.now() - inicio) / GAZE_TEMPO;
+    atualizarGazeFill();
+    if (gazeProg >= 1) {
+      clearInterval(gazeTimer);
+      executarGaze();
+    }
+  }, 50);
+}
+
+function cancelarGaze() {
+  if (gazeTimer) { clearInterval(gazeTimer); gazeTimer = null; }
+  gazeProg = 0;
+  gazeAlvo = null;
+  atualizarGazeFill();
+}
+
+function atualizarGazeFill() {
+  const pct = Math.min(gazeProg * 100, 100);
+  const cor = `rgba(200,134,10,0.6)`;
+  document.getElementById('fill-prev').style.background =
+    gazeAlvo === 'prev' ? `conic-gradient(${cor} ${pct}%, transparent ${pct}%)` : 'none';
+  document.getElementById('fill-next').style.background =
+    gazeAlvo === 'next' ? `conic-gradient(${cor} ${pct}%, transparent ${pct}%)` : 'none';
+}
+
+function executarGaze() {
+  if (gazeAlvo === 'prev') {
+    trocarCena((cenaAtual - 1 + CENAS.length) % CENAS.length);
+  } else if (gazeAlvo === 'next') {
+    trocarCena((cenaAtual + 1) % CENAS.length);
+  }
+  gazeAlvo = null; gazeProg = 0;
+  atualizarGazeFill();
+}
+
+</script>
+</body>
+</html>
