@@ -445,6 +445,7 @@
   <div class="hud-titulo" id="hud-titulo">Povos Originários</div>
 
   <button id="btn-sair" onclick="sairVR()">✕ SAIR</button>
+  <button id="btn-vr-toggle" onclick="toggleVR()" style="position:fixed;top:12px;left:12px;z-index:210;background:rgba(0,0,0,0.7);border:1px solid rgba(200,134,10,0.4);color:#E6A020;font-size:12px;font-weight:600;padding:8px 14px;border-radius:20px;cursor:pointer;font-family:'Inter',sans-serif;letter-spacing:1px;">🥽 VR</button>
 
   <div id="instrucao-vr">Arraste para olhar ao redor · Toque nos ícones para trocar de cena</div>
 
@@ -551,26 +552,23 @@ const fsSource = `
   }
 
   void main() {
-    // UV em espaço de cada olho
     vec2 uv = v_uv;
-    if(u_eye < 0.0) uv.x = uv.x * 2.0;        // olho esquerdo
-    else            uv.x = uv.x * 2.0 - 1.0;   // olho direito
+    if(u_eye < -0.5) uv.x = uv.x * 2.0;           // olho esquerdo VR
+    else if(u_eye > 0.5) uv.x = uv.x * 2.0 - 1.0; // olho direito VR
+    // u_eye == 0: visão normal, uv sem alteração
 
-    // Ray da câmera
     vec2 ndc = uv * 2.0 - 1.0;
     ndc.x *= u_aspect;
     float f = 1.0 / tan(u_fov * 0.5);
     vec3 ray = normalize(vec3(ndc.x, ndc.y, f));
 
-    // Aplicar rotação
     ray = rotX(-u_pitch) * rotY(u_yaw) * ray;
 
-    // Equirretangular
     float lon = atan(ray.x, ray.z);
     float lat = asin(clamp(ray.y, -1.0, 1.0));
     vec2 texUV = vec2(
       (lon / (2.0 * PI)) + 0.5,
-      (lat / PI) + 0.5
+      1.0 - ((lat / PI) + 0.5)
     );
 
     gl_FragColor = texture2D(u_tex, texUV);
@@ -660,6 +658,8 @@ function mostrarPlaceholder() {
 // ══════════════════════════════════════════
 // LOOP DE RENDER
 // ══════════════════════════════════════════
+let vrMode = false;
+
 function render() {
   animId = requestAnimationFrame(render);
 
@@ -669,30 +669,41 @@ function render() {
   canvas.height = H;
   gl.viewport(0, 0, W, H);
 
-  const fov = 1.5; // ~86°
-  const asp = (W * 0.5) / H; // cada olho é metade da largura
+  const fov = 1.5;
 
-  // Olho esquerdo (0 a W/2)
   gl.uniform1i(window._uniforms.tex, 0);
   gl.uniform1f(window._uniforms.yaw, yaw);
   gl.uniform1f(window._uniforms.pitch, pitch);
   gl.uniform1f(window._uniforms.fov, fov);
-  gl.uniform1f(window._uniforms.aspect, asp);
-  gl.uniform1f(window._uniforms.eye, -1.0);
-  gl.scissor(0, 0, W/2, H);
-  gl.enable(gl.SCISSOR_TEST);
-  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-  // Olho direito (W/2 a W)
-  gl.uniform1f(window._uniforms.eye, 1.0);
-  gl.scissor(W/2, 0, W/2, H);
-  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  if (vrMode) {
+    const asp = (W * 0.5) / H;
+    gl.uniform1f(window._uniforms.aspect, asp);
+    gl.enable(gl.SCISSOR_TEST);
+    gl.uniform1f(window._uniforms.eye, -1.0);
+    gl.scissor(0, 0, W/2, H);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.uniform1f(window._uniforms.eye, 1.0);
+    gl.scissor(W/2, 0, W/2, H);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.disable(gl.SCISSOR_TEST);
+  } else {
+    gl.uniform1f(window._uniforms.aspect, W / H);
+    gl.uniform1f(window._uniforms.eye, 0.0);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+}
 
-  gl.disable(gl.SCISSOR_TEST);
-
-  // Linha divisória central
-  const ctx2d = document.createElement('canvas').getContext('2d');
-  // (linha desenhada via CSS em elemento separado se necessário)
+function toggleVR() {
+  vrMode = !vrMode;
+  const btn = document.getElementById('btn-vr-toggle');
+  btn.textContent = vrMode ? '📱 Normal' : '🥽 VR';
+  const gaze = document.getElementById('gaze-prev');
+  const gazeN = document.getElementById('gaze-next');
+  const gazeCursor = document.getElementById('gaze-cursor');
+  gaze.style.display = vrMode ? 'flex' : 'none';
+  gazeN.style.display = vrMode ? 'flex' : 'none';
+  gazeCursor.style.display = vrMode ? 'block' : 'none';
 }
 
 // ══════════════════════════════════════════
@@ -701,11 +712,13 @@ function render() {
 function entrarVR(idx) {
   if (!initGL()) return;
 
+  vrMode = false;
   document.getElementById('tela-inicio').style.display = 'none';
   document.getElementById('tela-vr').style.display = 'block';
-  document.getElementById('gaze-prev').style.display = 'flex';
-  document.getElementById('gaze-next').style.display = 'flex';
-  document.getElementById('gaze-cursor').style.display = 'block';
+  document.getElementById('gaze-prev').style.display = 'none';
+  document.getElementById('gaze-next').style.display = 'none';
+  document.getElementById('gaze-cursor').style.display = 'none';
+  document.getElementById('btn-vr-toggle').textContent = '🥽 VR';
 
   // Solicitar giroscópio (iOS 13+)
   if (typeof DeviceOrientationEvent !== 'undefined' &&
