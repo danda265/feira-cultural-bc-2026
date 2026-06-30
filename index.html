@@ -417,8 +417,9 @@
 
     <button id="btn-sair" onclick="sairVR()">✕ SAIR</button>
     <button id="btn-vr-toggle" onclick="toggleVR()" style="position:fixed;top:12px;left:12px;z-index:210;background:rgba(0,0,0,0.7);border:1px solid rgba(200,134,10,0.4);color:#E6A020;font-size:12px;font-weight:600;padding:8px 14px;border-radius:20px;cursor:pointer;font-family:'Inter',sans-serif;letter-spacing:1px;">🥽 VR</button>
+    <button id="btn-centralizar" onclick="recentralizar()" style="position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:210;background:rgba(0,0,0,0.7);border:1px solid rgba(200,134,10,0.4);color:#E6A020;font-size:12px;font-weight:600;padding:8px 14px;border-radius:20px;cursor:pointer;font-family:'Inter',sans-serif;letter-spacing:1px;">⊕ CENTRALIZAR</button>
 
-    <div id="instrucao-vr">Arraste ou incline o celular para olhar ao redor</div>
+    <div id="instrucao-vr">Toque em ⊕ CENTRALIZAR se a imagem parecer torta</div>
 
     <div class="seta-nav" id="seta-prev" onclick="cenaAnterior()">‹</div>
     <div class="seta-nav" id="seta-next" onclick="proximaCena()">›</div>
@@ -791,7 +792,7 @@ function onMouseMove(e) {
 // ══════════════════════════════════════════
 // GIROSCÓPIO
 // ══════════════════════════════════════════
-let lastAlpha = null, lastBeta = null;
+let lastAlpha = null, lastPitchSrc = null;
 
 function ativarGiroscopio() {
   window.addEventListener('deviceorientation', onGyro);
@@ -802,6 +803,14 @@ function desativarGiroscopio() {
   window.removeEventListener('deviceorientation', onGyro);
   gyroAtivo = false;
   lastAlpha = null;
+  lastPitchSrc = null;
+}
+
+function recentralizar() {
+  yaw = pitch = yawAlvo = pitchAlvo = 0;
+  lastAlpha = null;
+  lastPitchSrc = null;
+  mostrarControles();
 }
 
 // Diferença angular tratando o "salto" 0°/360° da bússola
@@ -812,19 +821,28 @@ function angDiff(a, b) {
   return d;
 }
 
+// Em portrait (orient=0/180): cima/baixo = beta
+// Em landscape (orient=±90): cima/baixo = gamma (os eixos rodam com o celular)
+function pitchSource(e) {
+  const orient = typeof window.orientation !== 'undefined'
+    ? window.orientation
+    : (screen.orientation ? screen.orientation.angle : 0);
+  if (orient === 90  || orient === -270) return -e.gamma; // landscape-left
+  if (orient === -90 || orient === 270)  return  e.gamma; // landscape-right
+  return e.beta; // portrait
+}
+
 function onGyro(e) {
   if (isDragging || e.alpha === null) return;
-  if (lastAlpha === null) { lastAlpha = e.alpha; lastBeta = e.beta; return; }
-  // Acumula a diferença entre leituras consecutivas (sempre pequena),
-  // em vez de comparar com uma base fixa — evita o salto ao passar de 180°
-  // durante uma volta completa de 360°.
+  const ps = pitchSource(e);
+  if (lastAlpha === null) { lastAlpha = e.alpha; lastPitchSrc = ps; return; }
   const da = angDiff(e.alpha, lastAlpha);
-  const db = e.beta - lastBeta;
+  const dp = ps - lastPitchSrc;
   yawAlvo   += da * Math.PI / 180;
-  pitchAlvo -= db * Math.PI / 180 * 0.5;
+  pitchAlvo -= dp * Math.PI / 180 * 0.5;
   pitchAlvo = Math.max(-1.3, Math.min(1.3, pitchAlvo));
   lastAlpha = e.alpha;
-  lastBeta = e.beta;
+  lastPitchSrc = ps;
 }
 
 </script>
