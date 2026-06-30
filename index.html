@@ -286,70 +286,6 @@
     transform: scale(1.15);
   }
 
-  /* Gaze cursor — círculo que aparece no centro da tela */
-  #gaze-cursor {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 20px;
-    height: 20px;
-    z-index: 205;
-    pointer-events: none;
-    display: none;
-  }
-
-  .gaze-ring {
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    border: 2px solid rgba(255,215,0,0.8);
-  }
-
-  .gaze-fill {
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    background: conic-gradient(var(--ouro-brilho) 0%, transparent 0%);
-    transition: background 0.05s linear;
-  }
-
-  /* Botões PRÓXIMO / ANTERIOR — gaze targets */
-  .gaze-btn {
-    position: fixed;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 50px;
-    height: 50px;
-    z-index: 206;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0,0,0,0.5);
-    border: 1.5px solid rgba(200,134,10,0.5);
-    border-radius: 50%;
-    pointer-events: none;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  #gaze-prev { left: 8px; }
-  #gaze-next { right: 8px; }
-
-  .gaze-btn span {
-    color: var(--ouro-claro);
-    font-size: 18px;
-    line-height: 1;
-  }
-
-  .gaze-fill-btn {
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    background: conic-gradient(rgba(200,134,10,0.6) 0%, transparent 0%);
-  }
-
-  /* Modo normal (sem óculos) — canvas full */
   #instrucao-vr {
     position: fixed;
     bottom: 70px;
@@ -361,6 +297,40 @@
     z-index: 202;
     white-space: nowrap;
   }
+
+  /* Controles da tela VR — somem sozinhos após alguns segundos */
+  #controles-vr {
+    transition: opacity 0.4s ease;
+    opacity: 1;
+  }
+
+  #controles-vr.escondido {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* Setas laterais de navegação */
+  .seta-nav {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 44px;
+    height: 44px;
+    z-index: 210;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.5);
+    border: 1px solid rgba(200,134,10,0.4);
+    border-radius: 50%;
+    color: var(--ouro-claro);
+    font-size: 22px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #seta-prev { left: 10px; }
+  #seta-next { right: 10px; }
 
 </style>
 </head>
@@ -442,36 +412,25 @@
 <div id="tela-vr">
   <canvas id="canvas-vr"></canvas>
 
-  <div class="hud-titulo" id="hud-titulo">Povos Originários</div>
+  <div id="controles-vr">
+    <div class="hud-titulo" id="hud-titulo">Povos Originários</div>
 
-  <button id="btn-sair" onclick="sairVR()">✕ SAIR</button>
-  <button id="btn-vr-toggle" onclick="toggleVR()" style="position:fixed;top:12px;left:12px;z-index:210;background:rgba(0,0,0,0.7);border:1px solid rgba(200,134,10,0.4);color:#E6A020;font-size:12px;font-weight:600;padding:8px 14px;border-radius:20px;cursor:pointer;font-family:'Inter',sans-serif;letter-spacing:1px;">🥽 VR</button>
+    <button id="btn-sair" onclick="sairVR()">✕ SAIR</button>
+    <button id="btn-vr-toggle" onclick="toggleVR()" style="position:fixed;top:12px;left:12px;z-index:210;background:rgba(0,0,0,0.7);border:1px solid rgba(200,134,10,0.4);color:#E6A020;font-size:12px;font-weight:600;padding:8px 14px;border-radius:20px;cursor:pointer;font-family:'Inter',sans-serif;letter-spacing:1px;">🥽 VR</button>
 
-  <div id="instrucao-vr">Arraste para olhar ao redor · Toque nos ícones para trocar de cena</div>
+    <div id="instrucao-vr">Arraste ou incline o celular para olhar ao redor</div>
 
-  <!-- Dots de navegação (toque antes de colocar óculos) -->
-  <div id="nav-cenas">
-    <div class="dot-cena ativa" onclick="trocarCena(0)" title="Povos Originários">🌿</div>
-    <div class="dot-cena" onclick="trocarCena(1)" title="Carta de Sesmaria">📜</div>
-    <div class="dot-cena" onclick="trocarCena(2)" title="Pescadores">⚓</div>
-    <div class="dot-cena" onclick="trocarCena(3)" title="Quilombola">🥁</div>
-    <div class="dot-cena" onclick="trocarCena(4)" title="BC Hoje">🌊</div>
-  </div>
+    <div class="seta-nav" id="seta-prev" onclick="cenaAnterior()">‹</div>
+    <div class="seta-nav" id="seta-next" onclick="proximaCena()">›</div>
 
-  <!-- Gaze cursor central -->
-  <div id="gaze-cursor">
-    <div class="gaze-ring"></div>
-    <div class="gaze-fill" id="gaze-fill"></div>
-  </div>
-
-  <!-- Botões gaze laterais -->
-  <div class="gaze-btn" id="gaze-prev">
-    <div class="gaze-fill-btn" id="fill-prev"></div>
-    <span>‹</span>
-  </div>
-  <div class="gaze-btn" id="gaze-next">
-    <div class="gaze-fill-btn" id="fill-next"></div>
-    <span>›</span>
+    <!-- Dots de navegação -->
+    <div id="nav-cenas">
+      <div class="dot-cena ativa" onclick="trocarCena(0)" title="Povos Originários">🌿</div>
+      <div class="dot-cena" onclick="trocarCena(1)" title="Carta de Sesmaria">📜</div>
+      <div class="dot-cena" onclick="trocarCena(2)" title="Pescadores">⚓</div>
+      <div class="dot-cena" onclick="trocarCena(3)" title="Quilombola">🥁</div>
+      <div class="dot-cena" onclick="trocarCena(4)" title="BC Hoje">🌊</div>
+    </div>
   </div>
 </div>
 
@@ -512,13 +471,11 @@ let textura = null;
 let imagem = null;
 let isDragging = false;
 let lastX = 0, lastY = 0;
-let yaw = 0, pitch = 0;
+let yaw = 0, pitch = 0;       // valores renderizados (suavizados)
+let yawAlvo = 0, pitchAlvo = 0; // valores-alvo (vindos do toque/giroscópio)
 let gyroAtivo = false;
 let animId = null;
-let gazeTimer = null;
-let gazeProg = 0;
-let gazeAlvo = null; // 'prev' | 'next'
-const GAZE_TEMPO = 2000; // ms
+let controlesTimer = null;
 
 // ══════════════════════════════════════════
 // SHADERS WebGL para esfera 360°
@@ -663,6 +620,10 @@ let vrMode = false;
 function render() {
   animId = requestAnimationFrame(render);
 
+  // Suavização (lerp) do movimento — evita tremor/jitter do giroscópio
+  yaw   += (yawAlvo - yaw) * 0.15;
+  pitch += (pitchAlvo - pitch) * 0.15;
+
   const W = window.innerWidth;
   const H = window.innerHeight;
   canvas.width = W;
@@ -698,12 +659,7 @@ function toggleVR() {
   vrMode = !vrMode;
   const btn = document.getElementById('btn-vr-toggle');
   btn.textContent = vrMode ? '📱 Normal' : '🥽 VR';
-  const gaze = document.getElementById('gaze-prev');
-  const gazeN = document.getElementById('gaze-next');
-  const gazeCursor = document.getElementById('gaze-cursor');
-  gaze.style.display = vrMode ? 'flex' : 'none';
-  gazeN.style.display = vrMode ? 'flex' : 'none';
-  gazeCursor.style.display = vrMode ? 'block' : 'none';
+  mostrarControles();
 }
 
 // ══════════════════════════════════════════
@@ -713,12 +669,11 @@ function entrarVR(idx) {
   if (!initGL()) return;
 
   vrMode = false;
+  yaw = pitch = yawAlvo = pitchAlvo = 0;
   document.getElementById('tela-inicio').style.display = 'none';
   document.getElementById('tela-vr').style.display = 'block';
-  document.getElementById('gaze-prev').style.display = 'none';
-  document.getElementById('gaze-next').style.display = 'none';
-  document.getElementById('gaze-cursor').style.display = 'none';
   document.getElementById('btn-vr-toggle').textContent = '🥽 VR';
+  mostrarControles();
 
   // Solicitar giroscópio (iOS 13+)
   if (typeof DeviceOrientationEvent !== 'undefined' &&
@@ -766,7 +721,28 @@ function trocarCena(idx) {
   // Carregar textura
   carregarTextura(CENAS[idx].url);
   // Reset view
-  yaw = 0; pitch = 0;
+  yaw = pitch = yawAlvo = pitchAlvo = 0;
+  mostrarControles();
+}
+
+function cenaAnterior() {
+  trocarCena((cenaAtual - 1 + CENAS.length) % CENAS.length);
+}
+
+function proximaCena() {
+  trocarCena((cenaAtual + 1) % CENAS.length);
+}
+
+// ══════════════════════════════════════════
+// CONTROLES AUTO-OCULTOS
+// ══════════════════════════════════════════
+function mostrarControles() {
+  const el = document.getElementById('controles-vr');
+  el.classList.remove('escondido');
+  if (controlesTimer) clearTimeout(controlesTimer);
+  controlesTimer = setTimeout(() => {
+    el.classList.add('escondido');
+  }, 3500);
 }
 
 // ══════════════════════════════════════════
@@ -779,7 +755,7 @@ function onTouchStart(e) {
   isDragging = true;
   touchStartX = e.touches[0].clientX;
   touchStartY = e.touches[0].clientY;
-  iniciarGaze(e.touches[0].clientX, e.touches[0].clientY);
+  mostrarControles();
 }
 
 function onTouchMove(e) {
@@ -787,29 +763,28 @@ function onTouchMove(e) {
   if (!isDragging) return;
   const dx = e.touches[0].clientX - touchStartX;
   const dy = e.touches[0].clientY - touchStartY;
-  yaw   -= dx * 0.005;
-  pitch += dy * 0.005;
-  pitch = Math.max(-1.3, Math.min(1.3, pitch));
+  yawAlvo   -= dx * 0.005;
+  pitchAlvo += dy * 0.005;
+  pitchAlvo = Math.max(-1.3, Math.min(1.3, pitchAlvo));
   touchStartX = e.touches[0].clientX;
   touchStartY = e.touches[0].clientY;
-  cancelarGaze();
 }
 
 function onTouchEnd() {
   isDragging = false;
-  cancelarGaze();
 }
 
 function onMouseDown(e) {
   isDragging = true;
   lastX = e.clientX; lastY = e.clientY;
+  mostrarControles();
 }
 
 function onMouseMove(e) {
   if (!isDragging) return;
-  yaw   -= (e.clientX - lastX) * 0.005;
-  pitch += (e.clientY - lastY) * 0.005;
-  pitch = Math.max(-1.3, Math.min(1.3, pitch));
+  yawAlvo   -= (e.clientX - lastX) * 0.005;
+  pitchAlvo += (e.clientY - lastY) * 0.005;
+  pitchAlvo = Math.max(-1.3, Math.min(1.3, pitchAlvo));
   lastX = e.clientX; lastY = e.clientY;
 }
 
@@ -829,63 +804,22 @@ function desativarGiroscopio() {
   baseAlpha = null;
 }
 
+// Diferença angular tratando o "salto" 0°/360° da bússola
+function angDiff(a, b) {
+  let d = (a - b) % 360;
+  if (d > 180) d -= 360;
+  if (d < -180) d += 360;
+  return d;
+}
+
 function onGyro(e) {
-  if (isDragging) return;
+  if (isDragging || e.alpha === null) return;
   if (baseAlpha === null) { baseAlpha = e.alpha; baseBeta = e.beta; return; }
-  const da = e.alpha - baseAlpha;
-  const db = e.beta  - baseBeta;
-  yaw   = (-da * Math.PI / 180) % (2 * Math.PI);
-  pitch = db * Math.PI / 180 * 0.5;
-  pitch = Math.max(-1.3, Math.min(1.3, pitch));
-}
-
-// ══════════════════════════════════════════
-// GAZE CONTROL
-// ══════════════════════════════════════════
-function iniciarGaze(x, y) {
-  const W = window.innerWidth;
-  const zona = W * 0.15; // 15% das bordas
-  if (x < zona) gazeAlvo = 'prev';
-  else if (x > W - zona) gazeAlvo = 'next';
-  else return;
-
-  gazeProg = 0;
-  const inicio = Date.now();
-
-  gazeTimer = setInterval(() => {
-    gazeProg = (Date.now() - inicio) / GAZE_TEMPO;
-    atualizarGazeFill();
-    if (gazeProg >= 1) {
-      clearInterval(gazeTimer);
-      executarGaze();
-    }
-  }, 50);
-}
-
-function cancelarGaze() {
-  if (gazeTimer) { clearInterval(gazeTimer); gazeTimer = null; }
-  gazeProg = 0;
-  gazeAlvo = null;
-  atualizarGazeFill();
-}
-
-function atualizarGazeFill() {
-  const pct = Math.min(gazeProg * 100, 100);
-  const cor = `rgba(200,134,10,0.6)`;
-  document.getElementById('fill-prev').style.background =
-    gazeAlvo === 'prev' ? `conic-gradient(${cor} ${pct}%, transparent ${pct}%)` : 'none';
-  document.getElementById('fill-next').style.background =
-    gazeAlvo === 'next' ? `conic-gradient(${cor} ${pct}%, transparent ${pct}%)` : 'none';
-}
-
-function executarGaze() {
-  if (gazeAlvo === 'prev') {
-    trocarCena((cenaAtual - 1 + CENAS.length) % CENAS.length);
-  } else if (gazeAlvo === 'next') {
-    trocarCena((cenaAtual + 1) % CENAS.length);
-  }
-  gazeAlvo = null; gazeProg = 0;
-  atualizarGazeFill();
+  const da = angDiff(e.alpha, baseAlpha);
+  const db = e.beta - baseBeta;
+  yawAlvo   = (-da * Math.PI / 180);
+  pitchAlvo = db * Math.PI / 180 * 0.5;
+  pitchAlvo = Math.max(-1.3, Math.min(1.3, pitchAlvo));
 }
 
 </script>
