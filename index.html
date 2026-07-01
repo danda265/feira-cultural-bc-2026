@@ -419,7 +419,7 @@
     <button id="btn-vr-toggle" onclick="toggleVR()" style="position:fixed;top:12px;left:12px;z-index:210;background:rgba(0,0,0,0.7);border:1px solid rgba(200,134,10,0.4);color:#E6A020;font-size:12px;font-weight:600;padding:8px 14px;border-radius:20px;cursor:pointer;font-family:'Inter',sans-serif;letter-spacing:1px;">🥽 VR</button>
     <button id="btn-centralizar" onclick="recentralizar()" style="position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:210;background:rgba(0,0,0,0.7);border:1px solid rgba(200,134,10,0.4);color:#E6A020;font-size:12px;font-weight:600;padding:8px 14px;border-radius:20px;cursor:pointer;font-family:'Inter',sans-serif;letter-spacing:1px;">⊕ CENTRALIZAR</button>
 
-    <div id="instrucao-vr">Toque em ⊕ CENTRALIZAR se a imagem parecer torta</div>
+    <div id="instrucao-vr">Arraste ou incline o celular para olhar ao redor</div>
 
     <div class="seta-nav" id="seta-prev" onclick="cenaAnterior()">‹</div>
     <div class="seta-nav" id="seta-next" onclick="proximaCena()">›</div>
@@ -473,7 +473,9 @@ let imagem = null;
 let isDragging = false;
 let lastX = 0, lastY = 0;
 let yaw = 0, pitch = 0;       // valores renderizados (suavizados)
-let yawAlvo = 0, pitchAlvo = 0; // valores-alvo (vindos do toque/giroscópio)
+let yawAlvo = 0, pitchAlvo = 0; // valores-alvo finais (giroscópio + ajuste manual)
+let yawGyro = 0, pitchGyro = 0;     // componente vinda só do giroscópio (absoluta, sem drift)
+let yawManual = 0, pitchManual = 0; // offset acumulado por arrastar com o dedo/mouse
 let gyroAtivo = false;
 let animId = null;
 let controlesTimer = null;
@@ -621,8 +623,14 @@ let vrMode = false;
 function render() {
   animId = requestAnimationFrame(render);
 
-  // Suavização (lerp) do movimento — evita tremor/jitter do giroscópio
-  yaw   += (yawAlvo - yaw) * 0.15;
+  // Suavização (lerp) do movimento — evita tremor/jitter do giroscópio.
+  // yaw usa o caminho angular mais curto: sem isso, ao cruzar +180°/-180°
+  // (ex.: 179° -> -179°, um giro real de só 2°) o lerp ingênuo iria
+  // interpolar por -358° e girar a cena inteira ao contrário por um instante.
+  let dYaw = (yawAlvo - yaw) % (2 * Math.PI);
+  if (dYaw > Math.PI) dYaw -= 2 * Math.PI;
+  if (dYaw < -Math.PI) dYaw += 2 * Math.PI;
+  yaw   += dYaw * 0.15;
   pitch += (pitchAlvo - pitch) * 0.15;
 
   const W = window.innerWidth;
@@ -670,7 +678,8 @@ function entrarVR(idx) {
   if (!initGL()) return;
 
   vrMode = false;
-  yaw = pitch = yawAlvo = pitchAlvo = 0;
+  yaw = pitch = yawAlvo = pitchAlvo = yawGyro = pitchGyro = yawManual = pitchManual = 0;
+  baseQuat = null;
   document.getElementById('tela-inicio').style.display = 'none';
   document.getElementById('tela-vr').style.display = 'block';
   document.getElementById('btn-vr-toggle').textContent = '🥽 VR';
@@ -721,8 +730,9 @@ function trocarCena(idx) {
   });
   // Carregar textura
   carregarTextura(CENAS[idx].url);
-  // Reset view
-  yaw = pitch = yawAlvo = pitchAlvo = 0;
+  // Reset view — a direção que o usuário estiver olhando vira o centro da nova cena
+  yaw = pitch = yawAlvo = pitchAlvo = yawGyro = pitchGyro = yawManual = pitchManual = 0;
+  baseQuat = null;
   mostrarControles();
 }
 
@@ -764,9 +774,10 @@ function onTouchMove(e) {
   if (!isDragging) return;
   const dx = e.touches[0].clientX - touchStartX;
   const dy = e.touches[0].clientY - touchStartY;
-  yawAlvo   -= dx * 0.005;
-  pitchAlvo += dy * 0.005;
-  pitchAlvo = Math.max(-1.3, Math.min(1.3, pitchAlvo));
+  yawManual   -= dx * 0.005;
+  pitchManual += dy * 0.005;
+  yawAlvo   = yawGyro + yawManual;
+  pitchAlvo = Math.max(-1.3, Math.min(1.3, pitchGyro + pitchManual));
   touchStartX = e.touches[0].clientX;
   touchStartY = e.touches[0].clientY;
 }
@@ -783,66 +794,104 @@ function onMouseDown(e) {
 
 function onMouseMove(e) {
   if (!isDragging) return;
-  yawAlvo   -= (e.clientX - lastX) * 0.005;
-  pitchAlvo += (e.clientY - lastY) * 0.005;
-  pitchAlvo = Math.max(-1.3, Math.min(1.3, pitchAlvo));
+  yawManual   -= (e.clientX - lastX) * 0.005;
+  pitchManual += (e.clientY - lastY) * 0.005;
+  yawAlvo   = yawGyro + yawManual;
+  pitchAlvo = Math.max(-1.3, Math.min(1.3, pitchGyro + pitchManual));
   lastX = e.clientX; lastY = e.clientY;
 }
 
 // ══════════════════════════════════════════
 // GIROSCÓPIO
 // ══════════════════════════════════════════
-let lastAlpha = null, lastPitchSrc = null;
+// A abordagem antiga acumulava diferenças ingênuas de alpha/beta/gamma.
+// Isso quebra perto de beta≈90° (celular na vertical em frente ao rosto —
+// exatamente a posição de uso do VR!), onde alpha e gamma ficam acoplados
+// (gimbal lock do sensor). Resultado: ao girar o corpo ~180°, os eixos se
+// misturam e a imagem inverte. A solução robusta (usada por three.js,
+// A-Frame etc.) é compor a orientação como quaternion e extrair a rotação
+// RELATIVA ao ponto de partida — isso nunca tem descontinuidade, girando
+// 90°, 180° ou 720° a experiência permanece contínua.
+let baseQuat = null; // orientação (quaternion) capturada ao entrar/recentralizar
+
+function quatMul(a, b) {
+  return {
+    x: a.w*b.x + a.x*b.w + a.y*b.z - a.z*b.y,
+    y: a.w*b.y - a.x*b.z + a.y*b.w + a.z*b.x,
+    z: a.w*b.z + a.x*b.y - a.y*b.x + a.z*b.w,
+    w: a.w*b.w - a.x*b.x - a.y*b.y - a.z*b.z
+  };
+}
+function quatConj(q) { return { x: -q.x, y: -q.y, z: -q.z, w: q.w }; }
+function quatEixoAngulo(x, y, z, ang) {
+  const s = Math.sin(ang / 2);
+  return { x: x*s, y: y*s, z: z*s, w: Math.cos(ang / 2) };
+}
+// Conversão Euler(beta,alpha,-gamma) → quaternion, ordem YXZ.
+// Fórmula fechada padrão (mesma usada pelo three.js DeviceOrientationControls).
+function quatEulerYXZ(x, y, z) {
+  const c1 = Math.cos(x/2), c2 = Math.cos(y/2), c3 = Math.cos(z/2);
+  const s1 = Math.sin(x/2), s2 = Math.sin(y/2), s3 = Math.sin(z/2);
+  return {
+    x: s1*c2*c3 + c1*s2*s3,
+    y: c1*s2*c3 - s1*c2*s3,
+    z: c1*c2*s3 - s1*s2*c3,
+    w: c1*c2*c3 + s1*s2*s3
+  };
+}
+function quatRotVec(q, v) {
+  const r = quatMul(quatMul(q, {x:v[0], y:v[1], z:v[2], w:0}), quatConj(q));
+  return [r.x, r.y, r.z];
+}
+const QUAT_FIX = { x: -Math.SQRT1_2, y: 0, z: 0, w: Math.SQRT1_2 }; // -90° em X: mundo → câmera
+
+function anguloTela() {
+  if (screen.orientation && typeof screen.orientation.angle === 'number') return screen.orientation.angle;
+  if (typeof window.orientation === 'number') return (window.orientation + 360) % 360;
+  return 0;
+}
+
+function quaternionDoGiro(alpha, beta, gamma) {
+  const d2r = Math.PI / 180;
+  let q = quatEulerYXZ(beta * d2r, alpha * d2r, -gamma * d2r);
+  q = quatMul(q, QUAT_FIX);
+  q = quatMul(q, quatEixoAngulo(0, 0, 1, -anguloTela() * d2r));
+  return q;
+}
 
 function ativarGiroscopio() {
   window.addEventListener('deviceorientation', onGyro);
   gyroAtivo = true;
+  baseQuat = null;
 }
 
 function desativarGiroscopio() {
   window.removeEventListener('deviceorientation', onGyro);
   gyroAtivo = false;
-  lastAlpha = null;
-  lastPitchSrc = null;
+  baseQuat = null;
 }
 
 function recentralizar() {
+  yawManual = 0; pitchManual = 0;
+  baseQuat = null; // recaptura a base na próxima leitura do giroscópio
   yaw = pitch = yawAlvo = pitchAlvo = 0;
-  lastAlpha = null;
-  lastPitchSrc = null;
   mostrarControles();
 }
 
-// Diferença angular tratando o "salto" 0°/360° da bússola
-function angDiff(a, b) {
-  let d = (a - b) % 360;
-  if (d > 180) d -= 360;
-  if (d < -180) d += 360;
-  return d;
-}
-
-// Em portrait (orient=0/180): cima/baixo = beta
-// Em landscape (orient=±90): cima/baixo = gamma (os eixos rodam com o celular)
-function pitchSource(e) {
-  const orient = typeof window.orientation !== 'undefined'
-    ? window.orientation
-    : (screen.orientation ? screen.orientation.angle : 0);
-  if (orient === 90  || orient === -270) return -e.gamma; // landscape-left
-  if (orient === -90 || orient === 270)  return  e.gamma; // landscape-right
-  return e.beta; // portrait
-}
-
 function onGyro(e) {
-  if (isDragging || e.alpha === null) return;
-  const ps = pitchSource(e);
-  if (lastAlpha === null) { lastAlpha = e.alpha; lastPitchSrc = ps; return; }
-  const da = angDiff(e.alpha, lastAlpha);
-  const dp = ps - lastPitchSrc;
-  yawAlvo   += da * Math.PI / 180;
-  pitchAlvo -= dp * Math.PI / 180 * 0.5;
-  pitchAlvo = Math.max(-1.3, Math.min(1.3, pitchAlvo));
-  lastAlpha = e.alpha;
-  lastPitchSrc = ps;
+  if (e.alpha === null || e.beta === null || e.gamma === null) return;
+  const q = quaternionDoGiro(e.alpha, e.beta, e.gamma);
+  if (!baseQuat) { baseQuat = q; return; }
+  // Rotação relativa ao ponto de partida — independe do rumo da bússola,
+  // então não importa quantas voltas o usuário der.
+  const rel = quatMul(quatConj(baseQuat), q);
+  const fwd = quatRotVec(rel, [0, 0, 1]);
+  yawGyro = Math.atan2(fwd[0], fwd[2]);
+  pitchGyro = Math.asin(Math.max(-1, Math.min(1, fwd[1])));
+  if (!isDragging) {
+    yawAlvo   = yawGyro + yawManual;
+    pitchAlvo = Math.max(-1.3, Math.min(1.3, pitchGyro + pitchManual));
+  }
 }
 
 </script>
