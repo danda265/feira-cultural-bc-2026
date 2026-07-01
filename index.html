@@ -623,15 +623,16 @@ let vrMode = false;
 function render() {
   animId = requestAnimationFrame(render);
 
-  // Suavização (lerp) do movimento — evita tremor/jitter do giroscópio.
-  // yaw usa o caminho angular mais curto: sem isso, ao cruzar +180°/-180°
-  // (ex.: 179° -> -179°, um giro real de só 2°) o lerp ingênuo iria
-  // interpolar por -358° e girar a cena inteira ao contrário por um instante.
+  // Suavização mínima — só o suficiente pra tirar ruído de alta frequência
+  // do sensor, sem introduzir atraso perceptível (resposta quase 1:1 ao
+  // movimento da cabeça). yaw usa o caminho angular mais curto: sem isso,
+  // ao cruzar +180°/-180° (ex.: 179° -> -179°, giro real de só 2°) o lerp
+  // ingênuo iria interpolar por -358° e girar a cena toda ao contrário.
   let dYaw = (yawAlvo - yaw) % (2 * Math.PI);
   if (dYaw > Math.PI) dYaw -= 2 * Math.PI;
   if (dYaw < -Math.PI) dYaw += 2 * Math.PI;
-  yaw   += dYaw * 0.15;
-  pitch += (pitchAlvo - pitch) * 0.15;
+  yaw   += dYaw * 0.65;
+  pitch += (pitchAlvo - pitch) * 0.65;
 
   const W = window.innerWidth;
   const H = window.innerHeight;
@@ -956,9 +957,15 @@ function onDeviceMotion(e) {
     orientQuat = quatNormalizar(quatMul(orientQuat, dq));
   }
 
+  // Correção do acelerômetro só age quando o celular está quase parado —
+  // enquanto o usuário está de fato virando a cabeça, o peso cai a quase
+  // zero, então ela nunca "briga" com o giro real (era isso que deixava a
+  // imagem "molenga"). Só corrige deriva nas pausas entre um giro e outro.
   const ag = e.accelerationIncludingGravity;
   if (ag && (ag.x !== null && ag.y !== null && ag.z !== null)) {
-    orientQuat = corrigirComGravidade(orientQuat, ag.x, ag.y, ag.z, 0.01);
+    const pesoBase = 0.05;
+    const peso = pesoBase / (1 + w * w * 4); // w = velocidade angular (rad/s) já calculada acima
+    orientQuat = corrigirComGravidade(orientQuat, ag.x, ag.y, ag.z, peso);
   }
 
   if (isDragging) return;
