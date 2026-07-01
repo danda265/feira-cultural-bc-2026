@@ -902,6 +902,35 @@ function resetOrientQuat() {
   ultimoTempoMotion = null;
 }
 
+// Corrige deriva lenta do giroscópio puxando a orientação rastreada em
+// direção ao que o acelerômetro mede como "pra cima" (oposto da gravidade).
+// Sem isso, a integração do giroscópio (sozinha) deriva sem limite ao longo
+// do tempo — funciona bem por poucos segundos, mas depois de girar/usar por
+// mais tempo a imagem vai ficando cada vez mais torta, sem nada pra
+// "ancorar" de volta ao nível verdadeiro. Peso baixo de propósito: corrige
+// deriva lenta ao longo de alguns segundos sem brigar com giros rápidos
+// legítimos da cabeça.
+function corrigirComGravidade(q, ax, ay, az, peso) {
+  const norm = Math.sqrt(ax*ax + ay*ay + az*az);
+  if (norm < 1e-6) return q;
+  const gLocal = [ax/norm, ay/norm, az/norm];
+  const gMundo = quatRotVec(q, gLocal);
+  const up = [0, 1, 0]; // "pra cima" no mundo, na nossa convenção (conferido empiricamente)
+  const cross = [
+    gMundo[1]*up[2] - gMundo[2]*up[1],
+    gMundo[2]*up[0] - gMundo[0]*up[2],
+    gMundo[0]*up[1] - gMundo[1]*up[0]
+  ];
+  const crossNorm = Math.sqrt(cross[0]*cross[0] + cross[1]*cross[1] + cross[2]*cross[2]);
+  if (crossNorm < 1e-6) return q; // já alinhado (ou exatamente oposto — raríssimo, ignora)
+  const dot = Math.max(-1, Math.min(1, gMundo[0]*up[0] + gMundo[1]*up[1] + gMundo[2]*up[2]));
+  const erro = Math.acos(dot);
+  const eixoErro = cross.map(c => c / crossNorm);
+  const dqCorrecao = quatEixoAngulo(eixoErro[0], eixoErro[1], eixoErro[2], erro * peso);
+  // correção no referencial do MUNDO -> multiplica à ESQUERDA
+  return quatNormalizar(quatMul(dqCorrecao, q));
+}
+
 function onDeviceMotion(e) {
   const rr = e.rotationRate;
   if (!rr || (rr.alpha === null && rr.beta === null && rr.gamma === null)) return;
@@ -925,6 +954,11 @@ function onDeviceMotion(e) {
     const dq = quatEixoAngulo(wx/w, wy/w, wz/w, w * dt);
     // velocidade angular no referencial LOCAL -> multiplica à direita
     orientQuat = quatNormalizar(quatMul(orientQuat, dq));
+  }
+
+  const ag = e.accelerationIncludingGravity;
+  if (ag && (ag.x !== null && ag.y !== null && ag.z !== null)) {
+    orientQuat = corrigirComGravidade(orientQuat, ag.x, ag.y, ag.z, 0.01);
   }
 
   if (isDragging) return;
