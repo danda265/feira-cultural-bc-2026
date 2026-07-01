@@ -679,7 +679,7 @@ function entrarVR(idx) {
 
   vrMode = false;
   yaw = pitch = yawAlvo = pitchAlvo = yawGyro = pitchGyro = yawManual = pitchManual = 0;
-  baseQuat = null;
+  yawBase = pitchBase = null;
   document.getElementById('tela-inicio').style.display = 'none';
   document.getElementById('tela-vr').style.display = 'block';
   document.getElementById('btn-vr-toggle').textContent = '🥽 VR';
@@ -732,7 +732,7 @@ function trocarCena(idx) {
   carregarTextura(CENAS[idx].url);
   // Reset view — a direção que o usuário estiver olhando vira o centro da nova cena
   yaw = pitch = yawAlvo = pitchAlvo = yawGyro = pitchGyro = yawManual = pitchManual = 0;
-  baseQuat = null;
+  yawBase = pitchBase = null;
   mostrarControles();
 }
 
@@ -812,7 +812,7 @@ function onMouseMove(e) {
 // A-Frame etc.) é compor a orientação como quaternion e extrair a rotação
 // RELATIVA ao ponto de partida — isso nunca tem descontinuidade, girando
 // 90°, 180° ou 720° a experiência permanece contínua.
-let baseQuat = null; // orientação (quaternion) capturada ao entrar/recentralizar
+let yawBase = null, pitchBase = null; // yaw/pitch absolutos capturados ao entrar/recentralizar
 
 function quatMul(a, b) {
   return {
@@ -862,32 +862,45 @@ function quaternionDoGiro(alpha, beta, gamma) {
 function ativarGiroscopio() {
   window.addEventListener('deviceorientation', onGyro);
   gyroAtivo = true;
-  baseQuat = null;
+  yawBase = pitchBase = null;
 }
 
 function desativarGiroscopio() {
   window.removeEventListener('deviceorientation', onGyro);
   gyroAtivo = false;
-  baseQuat = null;
+  yawBase = pitchBase = null;
 }
 
 function recentralizar() {
   yawManual = 0; pitchManual = 0;
-  baseQuat = null; // recaptura a base na próxima leitura do giroscópio
+  yawBase = pitchBase = null; // recaptura a base na próxima leitura do giroscópio
   yaw = pitch = yawAlvo = pitchAlvo = 0;
   mostrarControles();
 }
 
+// Diferença angular pelo caminho mais curto (radianos, resultado em [-π,π])
+function diffAngularRad(a, b) {
+  let d = (a - b) % (2 * Math.PI);
+  if (d > Math.PI) d -= 2 * Math.PI;
+  if (d < -Math.PI) d += 2 * Math.PI;
+  return d;
+}
+
 function onGyro(e) {
   if (e.alpha === null || e.beta === null || e.gamma === null) return;
+  // yaw/pitch ABSOLUTOS, extraídos direto do quaternion (não de uma rotação
+  // relativa a uma base inclinada — conjugar por uma base com beta≠90°
+  // gira o eixo de referência do yaw, misturando yaw e pitch e fazendo a
+  // imagem "inclinar" progressivamente conforme o usuário gira o corpo).
   const q = quaternionDoGiro(e.alpha, e.beta, e.gamma);
-  if (!baseQuat) { baseQuat = q; return; }
-  // Rotação relativa ao ponto de partida — independe do rumo da bússola,
-  // então não importa quantas voltas o usuário der.
-  const rel = quatMul(quatConj(baseQuat), q);
-  const fwd = quatRotVec(rel, [0, 0, 1]);
-  yawGyro = Math.atan2(fwd[0], fwd[2]);
-  pitchGyro = Math.asin(Math.max(-1, Math.min(1, fwd[1])));
+  const fwd = quatRotVec(q, [0, 0, 1]);
+  const yawAbs = Math.atan2(fwd[0], fwd[2]);
+  const pitchAbs = Math.asin(Math.max(-1, Math.min(1, fwd[1])));
+  if (yawBase === null) { yawBase = yawAbs; pitchBase = pitchAbs; return; }
+  // Recentralização por subtração escalar independente em cada eixo —
+  // não por delta de quaternion, que é o que causava o acoplamento acima.
+  yawGyro = diffAngularRad(yawAbs, yawBase);
+  pitchGyro = pitchAbs - pitchBase;
   if (!isDragging) {
     yawAlvo   = yawGyro + yawManual;
     pitchAlvo = Math.max(-1.3, Math.min(1.3, pitchGyro + pitchManual));
