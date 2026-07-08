@@ -309,6 +309,31 @@
     pointer-events: none;
   }
 
+  /* Aparece brevemente ao detectar uma tecla do controle Bluetooth */
+  #tecla-detectada {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.8);
+    border: 1px solid rgba(200,134,10,0.5);
+    color: var(--ouro-claro);
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    padding: 10px 18px;
+    border-radius: 10px;
+    z-index: 300;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  #tecla-detectada.mostrar {
+    opacity: 1;
+  }
+
   /* Setas laterais de navegação */
   .seta-nav {
     position: fixed;
@@ -411,6 +436,7 @@
 ══════════════════════════════════════════ -->
 <div id="tela-vr">
   <canvas id="canvas-vr"></canvas>
+  <div id="tecla-detectada"></div>
 
   <div id="controles-vr">
     <div class="hud-titulo" id="hud-titulo">Povos Originários</div>
@@ -704,6 +730,9 @@ function entrarVR(idx) {
   canvas.addEventListener('mousemove',  onMouseMove);
   canvas.addEventListener('mouseup',    () => isDragging = false);
 
+  // Controle Bluetooth (clicker VR box) — chega como teclado, ver seção abaixo
+  window.addEventListener('keydown', onControleKeyDown);
+
   trocarCena(idx);
   render();
 }
@@ -716,6 +745,7 @@ function sairVR() {
   canvas.removeEventListener('touchend', onTouchEnd);
   canvas.removeEventListener('mousedown', onMouseDown);
   canvas.removeEventListener('mousemove', onMouseMove);
+  window.removeEventListener('keydown', onControleKeyDown);
 
   document.getElementById('tela-vr').style.display = 'none';
   document.getElementById('tela-inicio').style.display = 'flex';
@@ -800,6 +830,42 @@ function onMouseMove(e) {
   yawAlvo   = yawGyro + yawManual;
   pitchAlvo = Math.max(-1.3, Math.min(1.3, pitchGyro + pitchManual));
   lastX = e.clientX; lastY = e.clientY;
+}
+
+// ══════════════════════════════════════════
+// CONTROLE BLUETOOTH (clicker VR box, tipo "AB Shutter")
+// ══════════════════════════════════════════
+// Controles genéricos desse tipo pareiam como TECLADO Bluetooth no próprio
+// celular (Configurações > Bluetooth, antes de abrir o site) — depois de
+// pareado, os botões chegam na página como eventos de teclado normais, sem
+// precisar de nenhuma API especial. O problema: não existe um padrão único
+// de qual tecla cada botão manda — varia por fabricante. Cobrimos os
+// candidatos mais comuns (Enter/Espaço/setas, e as teclas de volume, já que
+// muitos desses controles nasceram como disparador de câmera). Se um botão
+// não corresponder, o indicador na tela mostra exatamente qual tecla foi
+// detectada, pra ajustar rápido.
+const TECLAS_PROXIMA  = ['Enter', ' ', 'ArrowRight', 'ArrowDown', 'AudioVolumeUp', 'MediaPlayPause'];
+const TECLAS_ANTERIOR = ['ArrowLeft', 'ArrowUp', 'AudioVolumeDown'];
+let teclaTimer = null;
+
+function onControleKeyDown(e) {
+  mostrarTeclaDetectada(e.key || ('code:' + e.keyCode));
+
+  if (TECLAS_PROXIMA.includes(e.key)) {
+    e.preventDefault();
+    proximaCena();
+  } else if (TECLAS_ANTERIOR.includes(e.key)) {
+    e.preventDefault();
+    cenaAnterior();
+  }
+}
+
+function mostrarTeclaDetectada(nome) {
+  const el = document.getElementById('tecla-detectada');
+  el.textContent = 'Tecla detectada: ' + nome;
+  el.classList.add('mostrar');
+  if (teclaTimer) clearTimeout(teclaTimer);
+  teclaTimer = setTimeout(() => el.classList.remove('mostrar'), 2000);
 }
 
 // ══════════════════════════════════════════
