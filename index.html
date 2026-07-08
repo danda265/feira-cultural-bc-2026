@@ -2,8 +2,16 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Viagem no Tempo — Balneário Camboriú 200 Anos</title>
+<!-- iOS: permite abrir sem a barra do Safari quando adicionado à Tela de Início
+     (a API de Fullscreen do navegador não funciona no Safari do iPhone — este
+     é o único jeito de esconder a barra de endereço de verdade nesse caso) -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Viagem no Tempo BC">
+<meta name="theme-color" content="#0D0800">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;500;600&display=swap');
 
@@ -725,6 +733,49 @@ function toggleVR() {
 }
 
 // ══════════════════════════════════════════
+// TELA CHEIA E TELA SEMPRE LIGADA
+// ══════════════════════════════════════════
+// No Android/Chrome, a API de Fullscreen esconde a barra de endereço de
+// verdade. No iPhone, o Safari NÃO suporta essa API pra elementos comuns
+// — só esconde a barra se o site foi aberto via "Adicionar à Tela de
+// Início" (ver meta tags apple-mobile-web-app-capable no <head>).
+let wakeLock = null;
+
+async function entrarTelaCheia() {
+  const el = document.documentElement;
+  try {
+    if (el.requestFullscreen) await el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+  } catch (err) { /* iOS Safari fora da Tela de Início, ou permissão negada */ }
+}
+
+function sairTelaCheia() {
+  try {
+    if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen();
+    else if (document.webkitFullscreenElement && document.webkitExitFullscreen) document.webkitExitFullscreen();
+  } catch (err) {}
+}
+
+async function travarTela() {
+  try {
+    if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+  } catch (err) { wakeLock = null; }
+}
+
+function destravarTela() {
+  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+}
+
+// O navegador libera o wake lock sozinho quando a aba fica em segundo
+// plano — reativa ao voltar, se ainda estivermos na tela de VR.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' &&
+      document.getElementById('tela-vr').style.display === 'block') {
+    travarTela();
+  }
+});
+
+// ══════════════════════════════════════════
 // ENTRADA / SAÍDA VR
 // ══════════════════════════════════════════
 function entrarVR(idx) {
@@ -737,6 +788,9 @@ function entrarVR(idx) {
   document.getElementById('tela-vr').style.display = 'block';
   document.getElementById('btn-vr-toggle').textContent = '🥽 VR';
   mostrarControles();
+
+  entrarTelaCheia();
+  travarTela();
 
   // Solicitar giroscópio (iOS 13+)
   if (typeof DeviceOrientationEvent !== 'undefined' &&
@@ -775,6 +829,9 @@ function sairVR() {
   canvas.removeEventListener('mousemove', onMouseMove);
   window.removeEventListener('keydown', onControleKeyDown);
   window.removeEventListener('gamepadconnected', onGamepadConectado);
+
+  sairTelaCheia();
+  destravarTela();
 
   document.getElementById('tela-vr').style.display = 'none';
   document.getElementById('tela-inicio').style.display = 'flex';
