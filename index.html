@@ -646,8 +646,34 @@ function mostrarPlaceholder() {
 // ══════════════════════════════════════════
 let vrMode = false;
 
+// Alguns clickers Bluetooth mandam os botões como teclas de SISTEMA
+// (Volume, Home), que o Android intercepta antes de chegar no navegador —
+// nenhum site consegue capturar essas duas teclas específicas. A Gamepad
+// API é um caminho alternativo: se o mesmo controle (ou outro modelo)
+// também expuser um perfil de gamepad, os botões chegam aqui direto, sem
+// passar pelo filtro de teclas de sistema do SO.
+let gamepadBotoesAnteriores = [];
+
+function verificarGamepad() {
+  if (!navigator.getGamepads) return;
+  const gamepads = navigator.getGamepads();
+  for (const gp of gamepads) {
+    if (!gp) continue;
+    gp.buttons.forEach((btn, i) => {
+      const pressionado = btn.pressed || btn.value > 0.5;
+      if (pressionado && !gamepadBotoesAnteriores[i]) {
+        mostrarTeclaDetectada('Gamepad botão ' + i);
+        if (i === 0) proximaCena();
+        else if (i === 1) cenaAnterior();
+      }
+      gamepadBotoesAnteriores[i] = pressionado;
+    });
+  }
+}
+
 function render() {
   animId = requestAnimationFrame(render);
+  verificarGamepad();
 
   // Suavização mínima — só o suficiente pra tirar ruído de alta frequência
   // do sensor, sem introduzir atraso perceptível (resposta quase 1:1 ao
@@ -732,6 +758,8 @@ function entrarVR(idx) {
 
   // Controle Bluetooth (clicker VR box) — chega como teclado, ver seção abaixo
   window.addEventListener('keydown', onControleKeyDown);
+  window.addEventListener('gamepadconnected', onGamepadConectado);
+  gamepadBotoesAnteriores = [];
 
   trocarCena(idx);
   render();
@@ -746,6 +774,7 @@ function sairVR() {
   canvas.removeEventListener('mousedown', onMouseDown);
   canvas.removeEventListener('mousemove', onMouseMove);
   window.removeEventListener('keydown', onControleKeyDown);
+  window.removeEventListener('gamepadconnected', onGamepadConectado);
 
   document.getElementById('tela-vr').style.display = 'none';
   document.getElementById('tela-inicio').style.display = 'flex';
@@ -849,7 +878,7 @@ const TECLAS_ANTERIOR = ['ArrowLeft', 'ArrowUp', 'AudioVolumeDown'];
 let teclaTimer = null;
 
 function onControleKeyDown(e) {
-  mostrarTeclaDetectada(e.key || ('code:' + e.keyCode));
+  mostrarTeclaDetectada('Tecla: ' + (e.key || ('code:' + e.keyCode)));
 
   if (TECLAS_PROXIMA.includes(e.key)) {
     e.preventDefault();
@@ -860,9 +889,13 @@ function onControleKeyDown(e) {
   }
 }
 
-function mostrarTeclaDetectada(nome) {
+function onGamepadConectado(e) {
+  mostrarTeclaDetectada('Gamepad conectado: ' + e.gamepad.id);
+}
+
+function mostrarTeclaDetectada(mensagem) {
   const el = document.getElementById('tecla-detectada');
-  el.textContent = 'Tecla detectada: ' + nome;
+  el.textContent = mensagem;
   el.classList.add('mostrar');
   if (teclaTimer) clearTimeout(teclaTimer);
   teclaTimer = setTimeout(() => el.classList.remove('mostrar'), 2000);
