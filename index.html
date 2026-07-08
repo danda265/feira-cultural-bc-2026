@@ -502,6 +502,7 @@ const CENAS = [
 // ══════════════════════════════════════════
 let cenaAtual = 0;
 let canvas, ctx, gl;
+let ehWebGL2 = false;
 let textura = null;
 let imagem = null;
 let isDragging = false;
@@ -574,7 +575,12 @@ const fsSource = `
 // ══════════════════════════════════════════
 function initGL() {
   canvas = document.getElementById('canvas-vr');
-  gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+  // WebGL2 primeiro: permite mipmap em texturas que não são potência de 2
+  // (a maioria dos nossos panoramas, ex. 1774×887) — sem isso a imagem fica
+  // com ruído/granulado visível quando vista de perto (campo de visão
+  // estreito do VR amplia esse efeito).
+  gl = canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+  ehWebGL2 = !!(window.WebGL2RenderingContext && gl instanceof WebGL2RenderingContext);
   if (!gl) { alert('Seu navegador não suporta WebGL'); return false; }
 
   function compilar(tipo, src) {
@@ -622,6 +628,10 @@ function initGL() {
   return true;
 }
 
+function ehPotenciaDeDois(n) {
+  return (n & (n - 1)) === 0 && n !== 0;
+}
+
 function carregarTextura(url) {
   if (!url) { mostrarPlaceholder(); return; }
   const img = new Image();
@@ -629,6 +639,17 @@ function carregarTextura(url) {
   img.onload = () => {
     gl.bindTexture(gl.TEXTURE_2D, textura);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+    // Mipmap evita ruído/granulado na imagem (o campo de visão estreito do
+    // VR amplia bastante esse efeito sem isso). WebGL1 só permite mipmap em
+    // texturas com dimensões potência de 2 — a maioria dos nossos panoramas
+    // não é (ex. 1774×887) — por isso preferimos WebGL2 (sem essa restrição)
+    // em initGL(), com esse fallback pra quando só WebGL1 está disponível.
+    if (ehWebGL2 || (ehPotenciaDeDois(img.naturalWidth) && ehPotenciaDeDois(img.naturalHeight))) {
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    } else {
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    }
   };
   img.onerror = () => mostrarPlaceholder();
   img.src = url;
@@ -647,6 +668,9 @@ function mostrarPlaceholder() {
   const px = new Uint8Array([r, g, b, 255]);
   gl.bindTexture(gl.TEXTURE_2D, textura);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  // Garante que a textura não fique "incompleta" caso o MIN_FILTER tenha
+  // ficado em modo mipmap de uma cena anterior (1x1 não precisa de mipmap).
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
 }
 
 // ══════════════════════════════════════════
@@ -792,7 +816,14 @@ function entrarVR(idx) {
   entrarTelaCheia();
   travarTela();
 
-  // Solicitar giroscópio (iOS 13+)
+  // Solicitar giroscópio (iOS 13+) — orientação e movimento (rotationRate)
+  // são permissões separadas na API, embora no iOS apareçam juntas num só
+  // diálogo do sistema. devicemotion (giroscópio puro) é o caminho
+  // preferido; deviceorientation é o fallback caso não esteja disponível.
+  if (typeof DeviceMotionEvent !== 'undefined' &&
+      typeof DeviceMotionEvent.requestPermission === 'function') {
+    DeviceMotionEvent.requestPermission().catch(() => {});
+  }
   if (typeof DeviceOrientationEvent !== 'undefined' &&
       typeof DeviceOrientationEvent.requestPermission === 'function') {
     DeviceOrientationEvent.requestPermission()
@@ -850,6 +881,7 @@ function trocarCena(idx) {
   // Reset view — a direção que o usuário estiver olhando vira o centro da nova cena
   yaw = pitch = yawAlvo = pitchAlvo = yawGyro = pitchGyro = yawManual = pitchManual = 0;
   yawOffset = null;
+  if (orientQuat) resetOrientQuat();
   mostrarControles();
 }
 
@@ -961,18 +993,37 @@ function mostrarTeclaDetectada(mensagem) {
 // ══════════════════════════════════════════
 // GIROSCÓPIO
 // ══════════════════════════════════════════
-// Padrão usado por bibliotecas de VR provadas em produção (A-Frame
-// look-controls, three.js DeviceOrientationControls — código real
-// conferido, não suposição): usar deviceorientation (alpha/beta/gamma)
-// direto, compor num quaternion absoluto, e extrair yaw/pitch dele.
-// PITCH NUNCA RECEBE OFFSET — é sempre o valor absoluto (celular nivelado
-// = olhando o horizonte da foto, igual visão humana de verdade). Só o YAW
-// recebe um deslocamento (capturado ao entrar/recentralizar), pra "pra
-// onde eu olho" virar o centro da cena. Tentativas anteriores que
-// tentaram "corrigir" isso com integração customizada de giroscópio +
-// filtro de acelerômetro só adicionaram complexidade e deixaram a
-// experiência lenta/instável — nenhuma biblioteca séria faz isso.
-let yawOffset = null; // yaw absoluto capturado ao entrar/recentralizar
+// deviceorientation (alpha/beta/gamma) é fundido pelo próprio aparelho
+// usando a bússola (magnetômetro) pro alpha — e, nesse ambiente
+// (interferência magnética real, comum em prédio com ferragem/metal),
+// isso contamina a fusão de forma dependente da direção: estável olhando
+// pra um lado, invertido pro lado oposto. Já confirmado por teste real
+// mais de uma vez nesta sessão. Usar deviceorientation puro (como
+// A-Frame/three.js fazem) é o padrão simples e correto QUANDO o ambiente
+// não tem essa interferência — aqui tem, então voltamos a usar o
+// giroscópio PURO (devicemotion/rotationRate, sem bússola/magnetômetro)
+// como fonte principal.
+//
+// A dificuldade de fazer isso sem ficar "molenga": giroscópio puro
+// SEMPRE deriva com o tempo (viés do sensor), e a correção por
+// acelerômetro pra evitar isso brigava com o movimento real da cabeça.
+// Solução: a correção só entra em ação quando o celular está DETECTADO
+// COMO PARADO (velocidade angular baixa por um tempo sustentado) — during
+// qualquer movimento ativo, correção = zero, resposta 100% giroscópio.
+const LIMIAR_PARADO_RAD_S = 0.06; // ~3.4°/s — abaixo disso conta como "parado"
+const TEMPO_PARADO_MS = 350;      // tempo parado antes da correção começar
+const PESO_CORRECAO_PARADO = 0.06; // só age parado, pode ser mais decisiva
+
+let yawOffset = null;          // (fallback via deviceorientation) yaw absoluto capturado ao entrar/recentralizar
+let orientQuat = null;         // orientação absoluta, integrada via giroscópio puro
+let motionDisponivel = false;  // true assim que confirmarmos leituras reais de rotationRate
+let ultimoTempoMotion = null;
+let velocidadeAngularSuavizada = 0;
+let paradoDesde = null;
+// beta/gamma vêm do acelerômetro (inclinação/gravidade), não da bússola —
+// seguros pra inicializar "o que é nível" uma única vez ao recentralizar.
+let ultimoBetaObservado = 90, ultimoGammaObservado = 0;
+let pitchOffsetInicial = 0; // pitch absoluto no instante do reset — subtraído pra centralizar a vista
 
 function quatMul(a, b) {
   return {
@@ -1027,13 +1078,104 @@ function diffAngularRad(a, b) {
   return d;
 }
 
+function quatNormalizar(q) {
+  const n = Math.sqrt(q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w);
+  if (n < 1e-9) return { x: 0, y: 0, z: 0, w: 1 };
+  return { x: q.x/n, y: q.y/n, z: q.z/n, w: q.w/n };
+}
+
+function resetOrientQuat() {
+  // alpha fixado em 0 de propósito — não importa o rumo absoluto/bússola,
+  // só a rotação relativa a partir daqui, então essa inicialização fica
+  // livre de qualquer interferência magnética.
+  orientQuat = quaternionDoGiro(0, ultimoBetaObservado, ultimoGammaObservado);
+  const fwd0 = quatRotVec(orientQuat, [0, 0, 1]);
+  pitchOffsetInicial = Math.asin(Math.max(-1, Math.min(1, fwd0[1])));
+  ultimoTempoMotion = null;
+  velocidadeAngularSuavizada = 0;
+  paradoDesde = null;
+}
+
+// Puxa a orientação rastreada em direção ao que o acelerômetro mede como
+// "pra cima" (oposto da gravidade) — só chamada quando parado (ver onDeviceMotion).
+function corrigirComGravidade(q, ax, ay, az, peso) {
+  const norm = Math.sqrt(ax*ax + ay*ay + az*az);
+  if (norm < 1e-6) return q;
+  const gLocal = [ax/norm, ay/norm, az/norm];
+  const gMundo = quatRotVec(q, gLocal);
+  const up = [0, 1, 0]; // "pra cima" no mundo, nesta convenção (conferido empiricamente)
+  const cross = [
+    gMundo[1]*up[2] - gMundo[2]*up[1],
+    gMundo[2]*up[0] - gMundo[0]*up[2],
+    gMundo[0]*up[1] - gMundo[1]*up[0]
+  ];
+  const crossNorm = Math.sqrt(cross[0]*cross[0] + cross[1]*cross[1] + cross[2]*cross[2]);
+  if (crossNorm < 1e-6) return q;
+  const dot = Math.max(-1, Math.min(1, gMundo[0]*up[0] + gMundo[1]*up[1] + gMundo[2]*up[2]));
+  const erro = Math.acos(dot);
+  const eixoErro = cross.map(c => c / crossNorm);
+  const dqCorrecao = quatEixoAngulo(eixoErro[0], eixoErro[1], eixoErro[2], erro * peso);
+  return quatNormalizar(quatMul(dqCorrecao, q)); // correção no referencial do MUNDO -> multiplica à ESQUERDA
+}
+
+function onDeviceMotion(e) {
+  const rr = e.rotationRate;
+  if (!rr || (rr.alpha === null && rr.beta === null && rr.gamma === null)) return;
+  motionDisponivel = true;
+  if (!orientQuat) resetOrientQuat();
+
+  const agora = performance.now();
+  if (ultimoTempoMotion === null) { ultimoTempoMotion = agora; return; }
+  let dt = (agora - ultimoTempoMotion) / 1000;
+  ultimoTempoMotion = agora;
+  dt = Math.min(dt, 0.1); // evita salto grande se o navegador atrasar um evento
+
+  // rotationRate: graus/s ao redor dos eixos LOCAIS do aparelho (mesma
+  // convenção de eixos do deviceorientation: alpha=Z, beta=X, gamma=Y)
+  const d2r = Math.PI / 180;
+  const wx = (rr.beta  || 0) * d2r;
+  const wy = (rr.gamma || 0) * d2r;
+  const wz = (rr.alpha || 0) * d2r;
+  const w = Math.sqrt(wx*wx + wy*wy + wz*wz);
+  if (w > 1e-8) {
+    const dq = quatEixoAngulo(wx/w, wy/w, wz/w, w * dt);
+    orientQuat = quatNormalizar(quatMul(orientQuat, dq)); // velocidade angular local -> multiplica à direita
+  }
+
+  // Só corrige com o acelerômetro quando o celular está parado há tempo
+  // suficiente — durante qualquer giro real da cabeça a correção fica
+  // zerada, então nunca "briga" com o movimento (era isso que deixava a
+  // experiência "molenga" numa tentativa anterior).
+  velocidadeAngularSuavizada = velocidadeAngularSuavizada * 0.8 + w * 0.2;
+  if (velocidadeAngularSuavizada < LIMIAR_PARADO_RAD_S) {
+    if (paradoDesde === null) paradoDesde = agora;
+  } else {
+    paradoDesde = null;
+  }
+
+  const ag = e.accelerationIncludingGravity;
+  if (ag && paradoDesde !== null && (agora - paradoDesde) > TEMPO_PARADO_MS &&
+      ag.x !== null && ag.y !== null && ag.z !== null) {
+    orientQuat = corrigirComGravidade(orientQuat, ag.x, ag.y, ag.z, PESO_CORRECAO_PARADO);
+  }
+
+  if (isDragging) return;
+  const fwd = quatRotVec(orientQuat, [0, 0, 1]);
+  yawGyro = Math.atan2(fwd[0], fwd[2]);
+  pitchGyro = Math.asin(Math.max(-1, Math.min(1, fwd[1]))) - pitchOffsetInicial;
+  yawAlvo   = yawGyro + yawManual;
+  pitchAlvo = Math.max(-1.3, Math.min(1.3, pitchGyro + pitchManual));
+}
+
+// Fallback: só usado se o aparelho nunca entregar rotationRate utilizável.
 function onGyro(e) {
+  if (e.beta !== null) ultimoBetaObservado = e.beta;
+  if (e.gamma !== null) ultimoGammaObservado = e.gamma;
+  if (motionDisponivel) return; // devicemotion (giroscópio puro, sem bússola) já assumiu
   if (e.alpha === null || e.beta === null || e.gamma === null) return;
   const q = quaternionDoGiro(e.alpha, e.beta, e.gamma);
   const fwd = quatRotVec(q, [0, 0, 1]);
   const yawAbs = Math.atan2(fwd[0], fwd[2]);
-  // Pitch direto, sem offset — celular nivelado sempre mostra o horizonte
-  // da foto (ver comentário no topo desta seção).
   pitchGyro = Math.asin(Math.max(-1, Math.min(1, fwd[1])));
   if (yawOffset === null) { yawOffset = yawAbs; return; }
   yawGyro = diffAngularRad(yawAbs, yawOffset);
@@ -1045,19 +1187,26 @@ function onGyro(e) {
 
 function ativarGiroscopio() {
   window.addEventListener('deviceorientation', onGyro);
+  window.addEventListener('devicemotion', onDeviceMotion);
   gyroAtivo = true;
   yawOffset = null;
+  motionDisponivel = false;
+  resetOrientQuat();
 }
 
 function desativarGiroscopio() {
   window.removeEventListener('deviceorientation', onGyro);
+  window.removeEventListener('devicemotion', onDeviceMotion);
   gyroAtivo = false;
   yawOffset = null;
+  motionDisponivel = false;
+  orientQuat = null;
 }
 
 function recentralizar() {
   yawManual = 0; pitchManual = 0;
-  yawOffset = null; // recaptura no próximo evento — "pra onde eu olho" vira o centro de novo
+  yawOffset = null; // recaptura no próximo evento (fallback) — "pra onde eu olho" vira o centro de novo
+  if (orientQuat) resetOrientQuat();
   mostrarControles();
 }
 
